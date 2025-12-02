@@ -14,6 +14,8 @@ Prompt health scoring, anti-pattern detection, and optimization suggestions
 [![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square&logo=python)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
 
+English | [简体中文](README_CN.md)
+
 [Features](#features) • [Quick Start](#quick-start) • [Documentation](#documentation) • [API Reference](#api-reference)
 
 </div>
@@ -142,7 +144,7 @@ claudescope/
 
 1. **Clone the repository**
 ```bash
-git clone https://github.com/yourusername/claudescope.git
+git clone https://github.com/Genius-Cai/claudescope.git
 cd claudescope
 ```
 
@@ -417,6 +419,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 Made with love by the ClaudeScope team
 
-[Report Bug](https://github.com/yourusername/claudescope/issues) • [Request Feature](https://github.com/yourusername/claudescope/issues)
+[Report Bug](https://github.com/Genius-Cai/claudescope/issues) • [Request Feature](https://github.com/Genius-Cai/claudescope/issues)
 
 </div>
