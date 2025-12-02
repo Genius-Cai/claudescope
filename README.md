@@ -14,13 +14,21 @@ Prompt health scoring, anti-pattern detection, and optimization suggestions
 [![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square&logo=python)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
 
+**[🚀 Live Demo](https://claudescope.geniuscai.com)**
+
 English | [简体中文](README_CN.md)
 
-[Features](#features) • [Quick Start](#quick-start) • [Documentation](#documentation) • [API Reference](#api-reference)
+[Features](#features) • [Live Demo](#live-demo) • [Quick Start](#quick-start) • [Documentation](#documentation) • [API Reference](#api-reference)
 
 </div>
 
 ---
+
+## Live Demo
+
+Try ClaudeScope without any setup: **[https://claudescope.geniuscai.com](https://claudescope.geniuscai.com)**
+
+The demo runs with sample data to showcase all features. To analyze your own Claude Code usage, follow the [Quick Start](#quick-start) guide below.
 
 ## Overview
 
@@ -73,6 +81,20 @@ Personalized recommendations:
 - Best practice suggestions
 - Trend indicators
 
+### Good Prompts
+Learn from your best prompts:
+- Automatic identification of high-quality prompts
+- Multi-dimensional scoring (clarity, context, structure, specificity, efficiency)
+- Random showcase of exemplary prompts with explanations
+- Understand why certain prompts work well
+
+### Settings & LLM Configuration
+Flexible AI provider management:
+- Support for multiple LLM providers (OpenAI, Anthropic, DeepSeek, Ollama)
+- Easy API key configuration with validation
+- Test connections before saving
+- Model selection per provider
+
 ## Tech Stack
 
 ### Frontend
@@ -117,12 +139,18 @@ claudescope/
 │   │   ├── routers/            # API route handlers
 │   │   │   ├── health_report.py
 │   │   │   ├── antipatterns.py
-│   │   │   └── statistics.py
+│   │   │   ├── statistics.py
+│   │   │   ├── good_prompts.py # Good prompts API
+│   │   │   └── settings.py     # Settings & API key management
 │   │   ├── services/           # Business logic
 │   │   │   ├── health_scorer.py
 │   │   │   ├── antipattern_engine.py
 │   │   │   ├── statistics_service.py
+│   │   │   ├── good_prompts_engine.py  # Prompt quality scoring
 │   │   │   └── data_reader.py
+│   │   ├── agents/             # LangChain/LangGraph agents
+│   │   │   ├── llm_factory.py  # Multi-provider LLM support
+│   │   │   └── graphs/         # LangGraph workflows
 │   │   ├── models/             # Pydantic schemas
 │   │   └── core/               # Configuration
 │   └── requirements.txt
@@ -279,6 +307,52 @@ Returns detected anti-patterns.
 #### GET `/api/antipatterns/summary`
 
 Returns anti-pattern summary statistics.
+
+### Good Prompts
+
+#### GET `/api/good-prompts/random`
+
+Returns a random high-quality prompt with analysis.
+
+**Query Parameters:**
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `days` | integer | 30 | Analysis period |
+
+**Response:**
+```json
+{
+  "text": "Full prompt text...",
+  "excerpt": "Truncated preview...",
+  "project": "my-project",
+  "timestamp": "2024-01-15T10:30:00Z",
+  "score": 92,
+  "reasons": ["Clear objective", "Specific requirements"],
+  "why_good": "This prompt clearly states the goal and provides context"
+}
+```
+
+### Settings
+
+#### POST `/api/settings/api-key`
+
+Save an API key to the .env file.
+
+**Request Body:**
+```json
+{
+  "provider": "anthropic",
+  "api_key": "sk-ant-..."
+}
+```
+
+#### POST `/api/settings/test-api-key`
+
+Test if an API key is valid.
+
+#### GET `/api/settings/env-status`
+
+Get configuration status of all providers.
 
 ### Statistics
 
