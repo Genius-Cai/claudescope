@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useMemo } from "react";
+import { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import {
   Lightbulb,
   TrendingUp,
@@ -18,10 +18,14 @@ import {
   Shield,
   BookOpen,
   RefreshCw,
+  Loader2,
+  Wand2,
 } from "lucide-react";
 import { useHealthReport, useStatisticsOverview, useAntipatternSummary } from "@/hooks/use-health-report";
+import { useAIInsights, useInsightsHealthCheck } from "@/hooks/use-ai-insights";
+import { LLMSelector } from "@/components/ui/llm-selector";
 import { cn } from "@/lib/utils";
-import type { HealthReportResponse, StatisticsOverviewResponse, AntipatternSummaryResponse } from "@/lib/api";
+import type { HealthReportResponse, StatisticsOverviewResponse, AntipatternSummaryResponse, InsightItem } from "@/lib/api";
 import gsap from "gsap";
 
 // Types for insights
@@ -170,6 +174,164 @@ function InsightCard({
           aria-hidden="true"
         />
       </div>
+    </div>
+  );
+}
+
+// AI Insights Panel component
+function AIInsightsPanel() {
+  const {
+    insights: aiInsights,
+    summary,
+    healthScore,
+    error,
+    isLoading,
+    isSuccess,
+    llmProvider,
+    llmModel,
+    generateInsights,
+    setLLMSettings,
+  } = useAIInsights({ days: 30 });
+
+  const { data: healthCheck } = useInsightsHealthCheck();
+
+  const handleProviderChange = useCallback(
+    (provider: string, model: string) => {
+      setLLMSettings(provider, model);
+    },
+    [setLLMSettings]
+  );
+
+  // Map API insight types to local types
+  const mapInsightType = (type: string): "positive" | "warning" | "tip" | "achievement" => {
+    switch (type) {
+      case "warning":
+        return "warning";
+      case "tip":
+        return "tip";
+      case "achievement":
+        return "achievement";
+      default:
+        return "positive";
+    }
+  };
+
+  if (healthCheck?.status === "no_providers") {
+    return (
+      <div className="bg-gradient-to-r from-orange-500/10 to-yellow-500/10 rounded-2xl p-6 border border-orange-200 dark:border-orange-800">
+        <div className="flex items-start gap-4">
+          <div className="p-3 rounded-xl bg-orange-100 dark:bg-orange-900/30">
+            <AlertTriangle className="w-6 h-6 text-orange-500" />
+          </div>
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              LLM Configuration Required
+            </h3>
+            <p className="text-gray-600 dark:text-gray-400 mb-4">
+              To generate AI-powered insights, please configure an LLM provider by setting one of these environment variables:
+            </p>
+            <ul className="text-sm text-gray-500 dark:text-gray-400 space-y-1 mb-4">
+              <li><code className="px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded">OPENAI_API_KEY</code></li>
+              <li><code className="px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded">ANTHROPIC_API_KEY</code></li>
+              <li><code className="px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded">DEEPSEEK_API_KEY</code></li>
+              <li>Or use <code className="px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded">Ollama</code> for local models</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-gradient-to-r from-purple-500/10 to-cyan-500/10 rounded-2xl p-6 border border-purple-200 dark:border-purple-800">
+      <div className="flex items-start justify-between gap-4 mb-6">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-purple-100 dark:bg-purple-900/30">
+            <Wand2 className="w-5 h-5 text-purple-500" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">AI-Powered Insights</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Generate personalized insights using LLM analysis
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <LLMSelector onProviderChange={handleProviderChange} size="sm" />
+          <button
+            onClick={generateInsights}
+            disabled={isLoading}
+            className={cn(
+              "flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-200",
+              "bg-gradient-to-r from-purple-500 to-cyan-500 text-white",
+              "hover:shadow-lg hover:shadow-purple-500/25",
+              "disabled:opacity-50 disabled:cursor-not-allowed"
+            )}
+          >
+            {isLoading ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Generating...</span>
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-4 h-4" />
+                <span>Generate</span>
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+
+      {error && (
+        <div className="mb-4 p-4 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+          <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+        </div>
+      )}
+
+      {isSuccess && summary && (
+        <div className="mb-6 p-4 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+          <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
+            <Brain className="w-4 h-4" />
+            AI Summary
+          </h3>
+          <p className="text-gray-600 dark:text-gray-400 text-sm whitespace-pre-line">
+            {summary}
+          </p>
+        </div>
+      )}
+
+      {isSuccess && aiInsights.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {aiInsights.map((insight, index) => (
+            <InsightCard
+              key={`ai-${index}`}
+              insight={{
+                id: `ai-${index}`,
+                type: mapInsightType(insight.type),
+                title: insight.title,
+                description: insight.description,
+                impact: insight.impact as "high" | "medium" | "low",
+                category: "health",
+                actionable: insight.actionable,
+              }}
+              delay={index * 100}
+            />
+          ))}
+        </div>
+      )}
+
+      {!isSuccess && !isLoading && (
+        <div className="text-center py-8">
+          <div className="p-4 rounded-full bg-gray-100 dark:bg-gray-700 w-fit mx-auto mb-4">
+            <Sparkles className="w-8 h-8 text-gray-400" />
+          </div>
+          <p className="text-gray-500 dark:text-gray-400">
+            Click &quot;Generate&quot; to create AI-powered insights based on your usage data
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -686,6 +848,9 @@ export default function InsightsPage() {
         </div>
       </div>
 
+      {/* AI Insights Panel - LLM-powered */}
+      <AIInsightsPanel />
+
       {/* Trends Section */}
       {trends.length > 0 && (
         <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg border border-gray-200 dark:border-gray-700">
@@ -702,6 +867,15 @@ export default function InsightsPage() {
           </div>
         </div>
       )}
+
+      {/* Rule-based Insights Section Header */}
+      <div className="flex items-center gap-3 pt-4">
+        <div className="p-2.5 rounded-xl bg-yellow-100 dark:bg-yellow-900/30">
+          <Lightbulb className="w-5 h-5 text-yellow-500" />
+        </div>
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Rule-based Insights</h2>
+        <span className="text-sm text-gray-500 dark:text-gray-400">(Based on detected patterns)</span>
+      </div>
 
       {/* Category Filter */}
       <div className="flex flex-wrap gap-2" role="group" aria-label="Filter insights by category">

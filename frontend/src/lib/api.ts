@@ -72,6 +72,41 @@ export interface StatisticsOverviewResponse {
   average_prompt_length: number;
 }
 
+// AI Insights types
+export interface InsightItem {
+  type: "warning" | "tip" | "achievement";
+  title: string;
+  description: string;
+  impact: "high" | "medium" | "low";
+  actionable?: string;
+}
+
+export interface InsightsResponse {
+  insights: InsightItem[];
+  summary: string;
+  health_score?: number;
+  error?: string;
+}
+
+export interface LLMProviderInfo {
+  id: string;
+  name: string;
+  models: string[];
+  default_model: string;
+  configured: boolean;
+}
+
+export interface LLMProvidersResponse {
+  providers: LLMProviderInfo[];
+  default_provider: string;
+}
+
+export interface InsightsHealthCheckResponse {
+  status: "ready" | "no_providers";
+  configured_providers: string[];
+  message: string;
+}
+
 async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${endpoint}`, {
     ...options,
@@ -118,4 +153,24 @@ export const api = {
   // Statistics
   getStatisticsOverview: (days = 30) =>
     fetchAPI<StatisticsOverviewResponse>(`/statistics/overview?days=${days}`),
+
+  // AI Insights
+  getInsights: (params?: {
+    days?: number;
+    project?: string;
+    llm_provider?: string;
+    llm_model?: string;
+  }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.days) searchParams.set("days", params.days.toString());
+    if (params?.project) searchParams.set("project", params.project);
+    if (params?.llm_provider) searchParams.set("llm_provider", params.llm_provider);
+    if (params?.llm_model) searchParams.set("llm_model", params.llm_model);
+    return fetchAPI<InsightsResponse>(`/insights?${searchParams}`);
+  },
+
+  getLLMProviders: () => fetchAPI<LLMProvidersResponse>("/insights/providers"),
+
+  getInsightsHealthCheck: () =>
+    fetchAPI<InsightsHealthCheckResponse>("/insights/health-check"),
 };
