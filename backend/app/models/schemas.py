@@ -25,6 +25,24 @@ class AntipatternType(str, Enum):
 
 # === Prompt Data Models ===
 
+class PromptCategory(str, Enum):
+    """Prompt categories for classification"""
+    CODE_GENERATION = "code_generation"
+    BUG_FIX = "bug_fix"
+    CODE_REVIEW = "code_review"
+    REFACTORING = "refactoring"
+    TESTING = "testing"
+    DOCUMENTATION = "documentation"
+    CONFIG_SETUP = "config_setup"
+    GIT_OPERATIONS = "git_operations"
+    FILE_OPERATIONS = "file_operations"
+    SEARCH_EXPLORE = "search_explore"
+    EXTENDED_THINKING = "extended_thinking"
+    QUESTION = "question"
+    CHINESE_LANGUAGE = "chinese_language"
+    GENERAL = "general"
+
+
 class PromptData(BaseModel):
     """Single prompt data from history"""
     text: str
@@ -35,6 +53,8 @@ class PromptData(BaseModel):
     has_code_block: bool = False
     has_thinking_trigger: bool = False
     thinking_triggers: list[str] = Field(default_factory=list)
+    has_image: bool = False
+    categories: list[PromptCategory] = Field(default_factory=list)
 
 
 class SessionData(BaseModel):
@@ -125,11 +145,21 @@ class TokenStats(BaseModel):
     by_project: dict[str, int]
 
 
+class CategoryStats(BaseModel):
+    """Category distribution statistics"""
+    total_categorized: int
+    by_category: dict[str, int]
+    by_category_percentage: dict[str, float]
+    prompts_with_images: int
+    image_percentage: float
+
+
 class StatisticsOverviewResponse(BaseModel):
     """Overview statistics response"""
     period_days: int
     thinking: ThinkingStats
     tokens: TokenStats
+    categories: Optional[CategoryStats] = None
     sessions_count: int
     projects_count: int
     prompts_count: int

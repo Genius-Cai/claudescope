@@ -3,13 +3,17 @@
 Main FastAPI application entry point.
 """
 
+import asyncio
+import json
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 
 from app.core.config import settings
 from app.routers import health_report, antipatterns, statistics
+from app.services.file_watcher import file_watcher, async_file_watcher
 
 
 @asynccontextmanager
@@ -21,8 +25,21 @@ async def lifespan(app: FastAPI):
         print(f"Claude data found at: {settings.claude_home}")
     else:
         print(f"Warning: Claude data not found at {settings.claude_home}")
+
+    # Start file watcher for real-time updates
+    if file_watcher.is_available:
+        if file_watcher.start():
+            async_file_watcher.setup()
+            print("File watcher started - real-time updates enabled")
+        else:
+            print("File watcher failed to start")
+    else:
+        print("watchdog not installed - real-time updates disabled")
+
     yield
+
     # Shutdown
+    file_watcher.stop()
     print("Shutting down ClaudeScope...")
 
 
@@ -63,3 +80,40 @@ async def root():
 async def health_check():
     """Health check endpoint"""
     return {"status": "healthy"}
+
+
+@app.get("/api/events/stream")
+async def event_stream():
+    """
+    Server-Sent Events endpoint for real-time file updates.
+
+    Streams events when Claude Code conversation files are modified.
+    Use this to get notified of new prompts without polling.
+    """
+    async def generate():
+        # Send initial connection message
+        yield f"data: {json.dumps({'type': 'connected', 'message': 'Connected to event stream'})}\n\n"
+
+        # Stream file change events
+        async for event in async_file_watcher.events():
+            yield f"data: {json.dumps(event)}\n\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        }
+    )
+
+
+@app.get("/api/watcher/status")
+async def watcher_status():
+    """Get file watcher status and statistics."""
+    return {
+        "available": file_watcher.is_available,
+        "running": file_watcher.is_running,
+        "stats": file_watcher.stats,
+    }

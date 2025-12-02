@@ -6,10 +6,12 @@ from typing import Optional
 
 from app.models.schemas import (
     PromptData,
+    PromptCategory,
     SessionData,
     StatisticsOverviewResponse,
     ThinkingStats,
     TokenStats,
+    CategoryStats,
 )
 
 
@@ -25,6 +27,7 @@ class StatisticsService:
         """Calculate overview statistics"""
         thinking_stats = self.calculate_thinking_stats(prompts, sessions, "day")
         token_stats = self.calculate_token_stats(sessions, "model")
+        category_stats = self.calculate_category_stats(prompts)
 
         # Calculate basic metrics
         projects = set(p.project for p in prompts)
@@ -41,11 +44,59 @@ class StatisticsService:
             period_days=days,
             thinking=thinking_stats,
             tokens=token_stats,
+            categories=category_stats,
             sessions_count=len(sessions),
             projects_count=len(projects),
             prompts_count=total_prompts,
             average_prompts_per_session=round(avg_prompts_per_session, 1),
             average_prompt_length=round(avg_prompt_length, 1),
+        )
+
+    def calculate_category_stats(
+        self,
+        prompts: list[PromptData],
+    ) -> CategoryStats:
+        """Calculate category distribution statistics"""
+        total = len(prompts)
+        if total == 0:
+            return CategoryStats(
+                total_categorized=0,
+                by_category={},
+                by_category_percentage={},
+                prompts_with_images=0,
+                image_percentage=0.0,
+            )
+
+        # Count categories
+        category_counts: dict[str, int] = defaultdict(int)
+        for prompt in prompts:
+            for category in prompt.categories:
+                category_counts[category.value] += 1
+
+        # Calculate percentages
+        category_percentages = {
+            cat: round(count / total * 100, 1)
+            for cat, count in category_counts.items()
+        }
+
+        # Sort by count
+        sorted_categories = dict(
+            sorted(category_counts.items(), key=lambda x: x[1], reverse=True)
+        )
+        sorted_percentages = dict(
+            sorted(category_percentages.items(), key=lambda x: x[1], reverse=True)
+        )
+
+        # Count images
+        prompts_with_images = sum(1 for p in prompts if p.has_image)
+        image_percentage = round(prompts_with_images / total * 100, 2)
+
+        return CategoryStats(
+            total_categorized=total,
+            by_category=sorted_categories,
+            by_category_percentage=sorted_percentages,
+            prompts_with_images=prompts_with_images,
+            image_percentage=image_percentage,
         )
 
     def calculate_thinking_stats(

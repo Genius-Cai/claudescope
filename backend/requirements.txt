@@ -20,6 +20,7 @@ crewai>=0.28.0
 python-dotenv>=1.0.0
 orjson>=3.9.0
 httpx>=0.26.0
+watchdog>=3.0.0
 
 # Development
 pytest>=7.4.0

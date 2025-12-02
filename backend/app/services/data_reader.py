@@ -14,7 +14,7 @@ from collections import defaultdict
 import hashlib
 
 from app.core.config import settings
-from app.models.schemas import PromptData, SessionData
+from app.models.schemas import PromptData, SessionData, PromptCategory
 
 
 class DataReader:
@@ -143,7 +143,10 @@ class DataReader:
                         timestamp = self._parse_timestamp(data.get("timestamp"))
 
                         if timestamp and timestamp >= cutoff:
-                            project = data.get("project", "")
+                            raw_project = data.get("project", "")
+
+                            # Convert raw path to smart project name
+                            project = self._normalize_project_path(raw_project)
 
                             # Apply project filter
                             if project_filter and project_filter not in project:
@@ -219,23 +222,24 @@ class DataReader:
                         if data.get("type") != "user":
                             continue
 
+                        # Skip meta messages (system-generated)
+                        if data.get("isMeta"):
+                            continue
+
                         timestamp = self._parse_timestamp(data.get("timestamp"))
                         if not timestamp or timestamp < cutoff:
                             continue
 
-                        # Extract text from message content
+                        # Extract text and image info from message content
                         message = data.get("message", {})
-                        content = message.get("content", [])
-                        text = ""
-                        for item in content:
-                            if isinstance(item, dict) and item.get("type") == "text":
-                                text = item.get("text", "")
-                                break
-                            elif isinstance(item, str):
-                                text = item
-                                break
+                        content = message.get("content", "")
+                        text, has_image = self._extract_content(content)
 
                         if not text:
+                            continue
+
+                        # Skip command-only messages
+                        if text.startswith("<command"):
                             continue
 
                         # Check for thinking triggers
@@ -249,6 +253,7 @@ class DataReader:
                             project=project_name,
                             session_id=data.get("sessionId"),
                             thinking_triggers=trigger_words,
+                            has_image=has_image,
                         )
                         prompts.append(prompt)
 
@@ -258,6 +263,35 @@ class DataReader:
             pass
 
         return prompts
+
+    def _extract_content(self, content) -> tuple[str, bool]:
+        """
+        Extract text content and detect images from message content.
+        Content can be a string or a list of content blocks.
+
+        Returns:
+            tuple of (text_content, has_image)
+        """
+        has_image = False
+
+        # Handle string content directly
+        if isinstance(content, str):
+            return content.strip(), False
+
+        # Handle list content (multimodal)
+        if isinstance(content, list):
+            text_parts = []
+            for item in content:
+                if isinstance(item, dict):
+                    if item.get("type") == "text":
+                        text_parts.append(item.get("text", ""))
+                    elif item.get("type") == "image":
+                        has_image = True
+                elif isinstance(item, str):
+                    text_parts.append(item)
+            return "\n".join(text_parts).strip(), has_image
+
+        return "", False
 
     def _parse_session_file(
         self,
@@ -288,29 +322,33 @@ class DataReader:
                         msg_type = data.get("type")
 
                         if msg_type == "user":
+                            # Skip meta messages
+                            if data.get("isMeta"):
+                                continue
+
                             timestamp = self._parse_timestamp(data.get("timestamp"))
                             if timestamp and timestamp >= cutoff:
                                 message = data.get("message", {})
-                                content = message.get("content", [])
-                                text = ""
-                                for item in content:
-                                    if isinstance(item, dict) and item.get("type") == "text":
-                                        text = item.get("text", "")
-                                        break
+                                content = message.get("content", "")
+                                text, has_image = self._extract_content(content)
 
-                                if text:
-                                    thinking_meta = data.get("thinkingMetadata", {})
-                                    triggers = thinking_meta.get("triggers", [])
-                                    trigger_words = [t.get("text", "") for t in triggers if isinstance(t, dict)]
+                                # Skip empty or command messages
+                                if not text or text.startswith("<command"):
+                                    continue
 
-                                    prompt = self._create_prompt_data(
-                                        text=text,
-                                        timestamp=timestamp,
-                                        project=project_name,
-                                        session_id=session_id,
-                                        thinking_triggers=trigger_words,
-                                    )
-                                    prompts.append(prompt)
+                                thinking_meta = data.get("thinkingMetadata", {})
+                                triggers = thinking_meta.get("triggers", [])
+                                trigger_words = [t.get("text", "") for t in triggers if isinstance(t, dict)]
+
+                                prompt = self._create_prompt_data(
+                                    text=text,
+                                    timestamp=timestamp,
+                                    project=project_name,
+                                    session_id=session_id,
+                                    thinking_triggers=trigger_words,
+                                    has_image=has_image,
+                                )
+                                prompts.append(prompt)
 
                         elif msg_type == "assistant":
                             # Extract token usage
@@ -341,6 +379,120 @@ class DataReader:
             total_output_tokens=total_output_tokens,
         )
 
+    # Classification patterns
+    CLASSIFICATION_PATTERNS = {
+        PromptCategory.CODE_GENERATION: [
+            r"write\s+(a\s+)?(code|function|script|class|module)",
+            r"create\s+(a\s+)?(file|component|api|endpoint)",
+            r"implement\s+",
+            r"generate\s+(code|function)",
+            r"add\s+(a\s+)?(feature|function|method)",
+        ],
+        PromptCategory.BUG_FIX: [
+            r"fix\s+",
+            r"bug\s+",
+            r"error\s+",
+            r"not\s+working",
+            r"doesn't\s+work",
+            r"broken",
+            r"issue\s+with",
+            r"problem\s+with",
+        ],
+        PromptCategory.CODE_REVIEW: [
+            r"explain\s+",
+            r"what\s+(does|is)\s+",
+            r"how\s+does\s+",
+            r"review\s+",
+            r"understand\s+",
+            r"why\s+(does|is)\s+",
+        ],
+        PromptCategory.REFACTORING: [
+            r"refactor\s+",
+            r"improve\s+",
+            r"optimize\s+",
+            r"clean\s+up",
+            r"restructure",
+        ],
+        PromptCategory.TESTING: [
+            r"test\s+",
+            r"unit\s+test",
+            r"integration\s+test",
+            r"coverage",
+            r"pytest",
+            r"jest",
+        ],
+        PromptCategory.DOCUMENTATION: [
+            r"document\s+",
+            r"readme",
+            r"docstring",
+            r"comment\s+",
+            r"api\s+doc",
+        ],
+        PromptCategory.CONFIG_SETUP: [
+            r"config\s+",
+            r"setup\s+",
+            r"install\s+",
+            r"environment",
+            r"docker",
+            r"deployment",
+        ],
+        PromptCategory.GIT_OPERATIONS: [
+            r"\bgit\s+",
+            r"commit\s+",
+            r"branch\s+",
+            r"merge\s+",
+            r"pull\s+request",
+            r"\bpr\b",
+        ],
+        PromptCategory.FILE_OPERATIONS: [
+            r"read\s+(the\s+)?file",
+            r"open\s+(the\s+)?file",
+            r"show\s+(me\s+)?(the\s+)?file",
+            r"list\s+(files|directory)",
+        ],
+        PromptCategory.SEARCH_EXPLORE: [
+            r"search\s+",
+            r"find\s+",
+            r"where\s+(is|are)\s+",
+            r"locate\s+",
+            r"look\s+for",
+        ],
+        PromptCategory.EXTENDED_THINKING: [
+            r"ultrathink",
+            r"megathink",
+            r"think\s+(hard|deep|carefully)",
+            r"深度思考",
+            r"仔细想",
+        ],
+        PromptCategory.QUESTION: [
+            r"^(what|how|why|when|where|can|could|would|should|is|are|do|does)\s+",
+            r"\?$",
+        ],
+    }
+
+    def _classify_prompt(self, text: str) -> list[PromptCategory]:
+        """Classify a prompt into categories based on content patterns."""
+        categories = []
+        text_lower = text.lower()
+
+        # Check for Chinese language
+        if re.search(r"[\u4e00-\u9fff]", text):
+            categories.append(PromptCategory.CHINESE_LANGUAGE)
+
+        # Check each category pattern
+        for category, patterns in self.CLASSIFICATION_PATTERNS.items():
+            for pattern in patterns:
+                if re.search(pattern, text_lower):
+                    if category not in categories:
+                        categories.append(category)
+                    break
+
+        # Default to general if no categories matched
+        if not categories:
+            categories.append(PromptCategory.GENERAL)
+
+        return categories
+
     def _create_prompt_data(
         self,
         text: str,
@@ -348,6 +500,7 @@ class DataReader:
         project: str,
         session_id: Optional[str] = None,
         thinking_triggers: Optional[list[str]] = None,
+        has_image: bool = False,
     ) -> PromptData:
         """Create a PromptData object from raw data"""
         triggers = thinking_triggers or []
@@ -362,6 +515,9 @@ class DataReader:
         # Check for code blocks
         has_code = bool(re.search(r"```[\s\S]*?```", text))
 
+        # Classify the prompt
+        categories = self._classify_prompt(text)
+
         return PromptData(
             text=text,
             timestamp=timestamp,
@@ -371,6 +527,8 @@ class DataReader:
             has_code_block=has_code,
             has_thinking_trigger=len(triggers) > 0,
             thinking_triggers=triggers,
+            has_image=has_image,
+            categories=categories,
         )
 
     def _parse_timestamp(self, ts) -> Optional[datetime]:
@@ -409,7 +567,142 @@ class DataReader:
         return None
 
     def _decode_project_name(self, encoded: str) -> str:
-        """Decode project directory name to actual path"""
-        # Claude encodes project paths - this is a simplified decode
-        # The actual encoding replaces / with some delimiter
-        return encoded.replace("-", "/").replace("_", " ")
+        """
+        Decode project directory name to a human-readable project name.
+
+        Examples:
+            -Users-geniusc-2026-Innovation-project -> 2026 Innovation Project
+            -Users-geniusc-Desktop-COMP2521-25T3 -> COMP2521 25T3
+            -Users-geniusc-Project-claudescope -> claudescope
+            -Volumes-HomeLab-Academic-MATH1231-2025T3 -> MATH1231 2025T3
+        """
+        # Remove leading dash
+        name = encoded.lstrip("-")
+
+        # Split by dash
+        parts = name.split("-")
+
+        # Remove common prefixes
+        prefixes_to_remove = ["Users", "Volumes", "geniusc", "Desktop", "Downloads", "Documents"]
+
+        # Filter out prefix parts
+        filtered_parts = []
+        skip_next = False
+        for i, part in enumerate(parts):
+            if skip_next:
+                skip_next = False
+                continue
+            if part in prefixes_to_remove:
+                continue
+            # Check for paths like "Home" in "Home-Lab" - keep meaningful parts
+            filtered_parts.append(part)
+
+        if not filtered_parts:
+            return "Home"
+
+        # Detect course codes (like COMP2521, MATH1231)
+        course_pattern = re.compile(r'^[A-Z]{4}\d{4}$')
+
+        # Detect semester patterns (like 25T3, 2025T3)
+        semester_pattern = re.compile(r'^\d{2,4}T\d$')
+
+        # Build smart name
+        result_parts = []
+        for part in filtered_parts:
+            # Keep course codes as-is
+            if course_pattern.match(part):
+                result_parts.append(part)
+            # Keep semester codes as-is
+            elif semester_pattern.match(part):
+                result_parts.append(part)
+            # Keep Academic keyword but combine with next meaningful part
+            elif part == "Academic":
+                continue  # Skip, the course code will follow
+            # Title case other parts
+            else:
+                # Convert to title case, handling special cases
+                if part.lower() in ["api", "ui", "ai", "ml", "db", "mcp", "n8n"]:
+                    result_parts.append(part.upper())
+                elif part.lower() == "homelab":
+                    result_parts.append("HomeLab")
+                else:
+                    result_parts.append(part.title() if part.islower() else part)
+
+        # Join with spaces
+        project_name = " ".join(result_parts)
+
+        # Clean up common patterns
+        project_name = project_name.replace("  ", " ").strip()
+
+        # Remove "Project" prefix if followed by actual project name
+        if project_name.startswith("Project ") and len(project_name) > 8:
+            project_name = project_name[8:]
+
+        # Remove "Output" suffix - merge with main project
+        if project_name.endswith(" Output"):
+            project_name = project_name[:-7]
+
+        # If result is just "Project", try to be more specific
+        if project_name == "Project":
+            project_name = "General Projects"
+
+        # Remove HomeLab prefix for academic courses
+        if project_name.startswith("HomeLab ") and re.search(r'[A-Z]{4}\d{4}', project_name):
+            project_name = project_name[8:]
+
+        # Merge "HomeLab Project" into "HomeLab"
+        if project_name == "HomeLab Project":
+            project_name = "HomeLab"
+
+        return project_name if project_name else "Unknown"
+
+    def _normalize_project_path(self, path: str) -> str:
+        """
+        Normalize a raw project path (from history.jsonl) to a smart project name.
+
+        Handles both formats:
+            - /Users/geniusc/2026-Innovation-project
+            - /Volumes/HomeLab/Project
+        """
+        if not path:
+            return "Unknown"
+
+        # Convert path separators to dashes (like the projects folder names)
+        # /Users/geniusc/2026-Innovation-project -> -Users-geniusc-2026-Innovation-project
+        encoded = path.replace("/", "-").replace("\\", "-")
+
+        # Handle underscores in paths (convert to dashes for consistency)
+        encoded = encoded.replace("_", "-")
+
+        return self._decode_project_name(encoded)
+
+    def get_project_category(self, project_name: str) -> str:
+        """
+        Categorize project into broader categories.
+
+        Categories:
+            - Academic: Course-related projects (COMP, MATH, etc.)
+            - Personal: Personal projects and experiments
+            - Work: Work-related projects
+            - HomeLab: Home lab infrastructure
+            - Other: Uncategorized
+        """
+        name_lower = project_name.lower()
+
+        # Academic courses
+        if re.search(r'[A-Z]{4}\d{4}', project_name):
+            return "Academic"
+
+        # HomeLab related
+        if "homelab" in name_lower or "home lab" in name_lower:
+            return "HomeLab"
+
+        # Innovation/Research
+        if "innovation" in name_lower or "research" in name_lower:
+            return "Research"
+
+        # Known project types
+        if any(x in name_lower for x in ["claudescope", "skill", "tiktok", "web"]):
+            return "Personal Projects"
+
+        return "Other"
