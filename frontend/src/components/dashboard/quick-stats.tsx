@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { MessageSquare, Folder, Zap, Clock, TrendingUp } from "lucide-react";
+import { MessageSquare, Folder, Zap, Clock } from "lucide-react";
 import { useStatisticsOverview } from "@/hooks/use-health-report";
 import { formatNumber, cn } from "@/lib/utils";
 
@@ -98,8 +98,7 @@ function StatCard({ icon, label, value, subtext, color, delay = 0 }: StatCardPro
             )}
           </p>
           {subtext && (
-            <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5 flex items-center gap-1">
-              <TrendingUp className="w-3 h-3" />
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
               {subtext}
             </p>
           )}

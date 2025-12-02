@@ -1,6 +1,19 @@
 /**
  * API client for ClaudeScope backend
+ * Supports demo mode fallback when API is unavailable
  */
+
+import {
+  isDemoMode,
+  demoHealthReport,
+  demoAntipatternSummary,
+  demoAntipatternList,
+  demoStatisticsOverview,
+  demoLLMProviders,
+  demoInsightsHealthCheck,
+  demoEnvStatus,
+  demoRandomGoodPrompt,
+} from "./demo-data";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "/api";
 
@@ -107,6 +120,53 @@ export interface InsightsHealthCheckResponse {
   message: string;
 }
 
+// Settings API types
+export interface SaveAPIKeyRequest {
+  provider: string;
+  api_key: string;
+}
+
+export interface SaveAPIKeyResponse {
+  success: boolean;
+  message: string;
+  provider: string;
+}
+
+export interface TestAPIKeyRequest {
+  provider: string;
+  api_key: string;
+}
+
+export interface TestAPIKeyResponse {
+  valid: boolean;
+  message: string;
+  provider: string;
+  model_tested?: string;
+}
+
+export interface EnvStatusResponse {
+  env_file_path: string;
+  env_file_exists: boolean;
+  providers: Record<string, {
+    env_var: string;
+    in_file: boolean;
+    in_environment: boolean;
+    configured: boolean;
+    key_preview: string;
+  }>;
+}
+
+// Good Prompts types
+export interface RandomGoodPromptResponse {
+  text: string;
+  excerpt: string;
+  project: string;
+  timestamp: string;
+  score: number;
+  reasons: string[];
+  why_good: string;
+}
+
 async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${endpoint}`, {
     ...options,
@@ -123,11 +183,33 @@ async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> 
   return res.json();
 }
 
+// Helper to try API call and fallback to demo data
+async function fetchWithDemoFallback<T>(
+  endpoint: string,
+  demoData: T,
+  options?: RequestInit
+): Promise<T> {
+  // If demo mode is explicitly enabled, return demo data
+  if (isDemoMode) {
+    return demoData;
+  }
+
+  // Try real API first
+  try {
+    return await fetchAPI<T>(endpoint, options);
+  } catch {
+    // Fallback to demo data on error
+    console.warn(`API unavailable for ${endpoint}, using demo data`);
+    return demoData;
+  }
+}
+
 export const api = {
   // Health Report
   getHealthReport: (days = 7, project?: string) =>
-    fetchAPI<HealthReportResponse>(
-      `/health-report?days=${days}${project ? `&project=${project}` : ""}`
+    fetchWithDemoFallback<HealthReportResponse>(
+      `/health-report?days=${days}${project ? `&project=${project}` : ""}`,
+      demoHealthReport
     ),
 
   // Antipatterns
@@ -144,17 +226,26 @@ export const api = {
     if (params?.limit) searchParams.set("limit", params.limit.toString());
     if (params?.offset) searchParams.set("offset", params.offset.toString());
     params?.type?.forEach((t) => searchParams.append("type", t));
-    return fetchAPI<AntipatternListResponse>(`/antipatterns?${searchParams}`);
+    return fetchWithDemoFallback<AntipatternListResponse>(
+      `/antipatterns?${searchParams}`,
+      demoAntipatternList
+    );
   },
 
   getAntipatternSummary: (days = 7) =>
-    fetchAPI<AntipatternSummaryResponse>(`/antipatterns/summary?days=${days}`),
+    fetchWithDemoFallback<AntipatternSummaryResponse>(
+      `/antipatterns/summary?days=${days}`,
+      demoAntipatternSummary
+    ),
 
   // Statistics
   getStatisticsOverview: (days = 30) =>
-    fetchAPI<StatisticsOverviewResponse>(`/statistics/overview?days=${days}`),
+    fetchWithDemoFallback<StatisticsOverviewResponse>(
+      `/statistics/overview?days=${days}`,
+      demoStatisticsOverview
+    ),
 
-  // AI Insights
+  // AI Insights - no demo fallback, requires real LLM
   getInsights: (params?: {
     days?: number;
     project?: string;
@@ -169,8 +260,41 @@ export const api = {
     return fetchAPI<InsightsResponse>(`/insights?${searchParams}`);
   },
 
-  getLLMProviders: () => fetchAPI<LLMProvidersResponse>("/insights/providers"),
+  getLLMProviders: () =>
+    fetchWithDemoFallback<LLMProvidersResponse>(
+      "/insights/providers",
+      demoLLMProviders
+    ),
 
   getInsightsHealthCheck: () =>
-    fetchAPI<InsightsHealthCheckResponse>("/insights/health-check"),
+    fetchWithDemoFallback<InsightsHealthCheckResponse>(
+      "/insights/health-check",
+      demoInsightsHealthCheck
+    ),
+
+  // Settings API - no demo fallback, requires real backend
+  saveAPIKey: (data: SaveAPIKeyRequest) =>
+    fetchAPI<SaveAPIKeyResponse>("/settings/api-key", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  testAPIKey: (data: TestAPIKeyRequest) =>
+    fetchAPI<TestAPIKeyResponse>("/settings/test-api-key", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  getEnvStatus: () =>
+    fetchWithDemoFallback<EnvStatusResponse>(
+      "/settings/env-status",
+      demoEnvStatus
+    ),
+
+  // Good Prompts
+  getRandomGoodPrompt: (days = 30) =>
+    fetchWithDemoFallback<RandomGoodPromptResponse>(
+      `/good-prompts/random?days=${days}`,
+      demoRandomGoodPrompt
+    ),
 };

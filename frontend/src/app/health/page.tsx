@@ -80,13 +80,12 @@ function LargeCircularProgress({
 
   return (
     <div className="relative w-56 h-56 group">
-      {/* Glow effect */}
+      {/* Subtle glow effect - using gradient colors */}
       <div
-        className={cn(
-          "absolute inset-0 rounded-full blur-2xl opacity-30 group-hover:opacity-50 transition-opacity duration-500",
-          config.glowColor
-        )}
-        style={{ backgroundColor: "currentColor" }}
+        className="absolute inset-0 rounded-full blur-2xl opacity-20 group-hover:opacity-30 transition-opacity duration-500"
+        style={{
+          background: "linear-gradient(135deg, rgba(139, 92, 246, 0.3), rgba(6, 182, 212, 0.3), rgba(16, 185, 129, 0.3))"
+        }}
       />
 
       <svg

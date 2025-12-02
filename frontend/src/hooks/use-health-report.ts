@@ -36,3 +36,12 @@ export function useStatisticsOverview(days = 30) {
     queryFn: () => api.getStatisticsOverview(days),
   });
 }
+
+export function useRandomGoodPrompt(days = 30) {
+  return useQuery({
+    queryKey: ["random-good-prompt", days],
+    queryFn: () => api.getRandomGoodPrompt(days),
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+    refetchOnWindowFocus: false,
+  });
+}

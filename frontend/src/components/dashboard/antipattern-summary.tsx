@@ -170,7 +170,7 @@ export function AntipatternSummary() {
       className={cn(
         "bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg border border-gray-200 dark:border-gray-700",
         "hover:shadow-xl transition-all duration-300 hover:-translate-y-1",
-        "group overflow-hidden relative"
+        "group overflow-hidden relative h-full"
       )}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
