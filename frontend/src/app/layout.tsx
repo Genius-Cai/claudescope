@@ -7,6 +7,11 @@ export const metadata: Metadata = {
   title: "ClaudeScope - Claude Code Usage Analyzer",
   description:
     "Analyze your Claude Code usage habits - Prompt health scoring, anti-pattern detection, and AI-driven optimization suggestions",
+  icons: {
+    icon: "/favicon.svg",
+    shortcut: "/favicon.svg",
+    apple: "/favicon.svg",
+  },
 };
 
 export default function RootLayout({
