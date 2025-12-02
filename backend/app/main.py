@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
 from app.core.config import settings
-from app.routers import health_report, antipatterns, statistics
+from app.routers import health_report, antipatterns, statistics, insights
 from app.services.file_watcher import file_watcher, async_file_watcher
 
 
@@ -63,6 +63,7 @@ app.add_middleware(
 app.include_router(health_report.router, prefix=settings.api_prefix, tags=["Health Report"])
 app.include_router(antipatterns.router, prefix=settings.api_prefix, tags=["Antipatterns"])
 app.include_router(statistics.router, prefix=settings.api_prefix, tags=["Statistics"])
+app.include_router(insights.router, prefix=settings.api_prefix, tags=["AI Insights"])
 
 
 @app.get("/")

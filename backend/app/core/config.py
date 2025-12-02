@@ -32,8 +32,17 @@ class Settings(BaseSettings):
     # Database
     database_url: str = "sqlite+aiosqlite:///./claudescope.db"
 
-    # Claude API (optional, for AI insights)
+    # LLM API Keys (for AI insights)
+    openai_api_key: Optional[str] = None
     anthropic_api_key: Optional[str] = None
+    deepseek_api_key: Optional[str] = None
+
+    # Ollama settings (local LLM)
+    ollama_base_url: str = "http://localhost:11434"
+
+    # Default LLM provider
+    default_llm_provider: str = "openai"
+    default_llm_model: Optional[str] = None
 
     # CORS
     cors_origins: list[str] = ["http://localhost:4000", "http://127.0.0.1:4000"]

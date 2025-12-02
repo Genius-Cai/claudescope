@@ -11,10 +11,13 @@ pydantic-settings>=2.1.0
 sqlalchemy>=2.0.25
 aiosqlite>=0.19.0
 
-# AI/ML
-langchain>=0.1.0
-langchain-anthropic>=0.1.0
-crewai>=0.28.0
+# AI/ML - LangChain & LangGraph
+langchain>=0.3.0
+langchain-core>=0.3.0
+langchain-openai>=0.2.0
+langchain-anthropic>=0.3.0
+langchain-ollama>=0.2.0
+langgraph>=0.2.0
 
 # Utilities
 python-dotenv>=1.0.0
