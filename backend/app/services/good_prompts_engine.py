@@ -71,6 +71,16 @@ class GoodPromptsEngine:
         r"^(.{1,20})$",  # Too short (less than 20 chars)
     ]
 
+    # Patterns to exclude system-generated content (like Claude's context summaries)
+    SYSTEM_CONTENT_PATTERNS = [
+        r"^This session is being continued from a previous conversation",
+        r"^<system-reminder>",
+        r"^Analysis:\s*Let me analyze",
+        r"^Summary:\s*\d+\.\s+Primary Request",
+        r"ran out of context\. The conversation is summarized below",
+        r"^Please continue the conversation from where we left",
+    ]
+
     # Quality indicators for code prompts
     CODE_QUALITY_PATTERNS = [
         r"with\s+(proper|good|appropriate)\s+(error|exception)\s+handling",
@@ -206,6 +216,13 @@ class GoodPromptsEngine:
         else:
             return 40  # Very long - might be context explosion
 
+    def _is_system_content(self, text: str) -> bool:
+        """Check if the prompt is system-generated content (like Claude's context summaries)"""
+        for pattern in self.SYSTEM_CONTENT_PATTERNS:
+            if re.search(pattern, text, re.IGNORECASE | re.MULTILINE):
+                return True
+        return False
+
     def get_good_prompts(
         self,
         prompts: list[PromptData],
@@ -224,11 +241,22 @@ class GoodPromptsEngine:
             List of dicts with prompt data and scores
         """
         scored_prompts = []
+        seen_prompts = set()  # Track unique prompts by first 200 chars
 
         for prompt in prompts:
             # Skip very short prompts
             if len(prompt.text) < 30:
                 continue
+
+            # Skip system-generated content (Claude's context summaries, etc.)
+            if self._is_system_content(prompt.text):
+                continue
+
+            # Skip duplicate prompts (same first 200 characters)
+            prompt_key = prompt.text[:200].strip()
+            if prompt_key in seen_prompts:
+                continue
+            seen_prompts.add(prompt_key)
 
             # Skip prompts that are mostly code blocks
             code_block_ratio = len(re.findall(r"```[\s\S]*?```", prompt.text)) / max(1, len(prompt.text) / 100)
